@@ -4,8 +4,9 @@ An Alfred-style desktop application built with Python that allows you to search 
 
 ## Features
 
-- **Modern GUI Interface**: Clean, responsive design with smooth scrolling
+- **Compact Alfred-like Interface**: Dark theme with dropdown results that expand as you type
 - **Real-time Search**: Search Best Buy products with instant results
+- **Optimized Filtering**: URL-level price filtering for faster response times
 - **Product Filtering**: Automatically filters products under $5,995
 - **Product Details**: Displays product images, names, and prices
 - **Direct Links**: Click to view products directly on Best Buy
@@ -13,13 +14,14 @@ An Alfred-style desktop application built with Python that allows you to search 
   - `Enter` - Search for products
   - `F1` - Focus search field
   - `Escape` - Exit application
-- **Fallback Mode**: Shows mock data if web scraping is unavailable
+- **Clean Results**: No mock data - shows only real search results
 
 ## Requirements
 
 - Python 3.7 or higher
 - Internet connection for web scraping
 - Modern web browser (for opening product links)
+- Oxylabs account (optional, for enhanced data fetching)
 
 ## Installation
 
@@ -30,26 +32,39 @@ An Alfred-style desktop application built with Python that allows you to search 
    pip install -r requirements.txt
    ```
 
-3. **Run the application**:
+3. **Configure Oxylabs (Optional)**:
+   ```bash
+   # Setup credentials interactively
+   python bestbuy_searcher.py --setup
+   
+   # Or edit .env file manually
+   nano .env
+   ```
+
+4. **Run the application**:
    ```bash
    python bestbuy_searcher.py
    ```
 
 ## Usage
 
-1. **Launch the application** - The search window will appear centered on your screen
+1. **Launch the application** - A compact search box will appear centered on your screen
 
-2. **Enter a search term** - Type any product category or brand name (e.g., "laptop", "Samsung", "gaming")
+2. **Start typing** - Results appear as a dropdown list as you type (after 2 characters)
 
-3. **Search** - Press `Enter` or click the "Search" button
-
-4. **Browse results** - Scroll through the product cards showing:
+3. **Browse results** - Scroll through the product cards showing:
    - Product image
    - Product name
    - Price (formatted)
-   - "View on Best Buy" button
+   - "Open in Browser" button
 
-5. **View products** - Click "View on Best Buy" to open the product page in your default browser
+4. **View products** - Click "Open in Browser" to open the product page in your default browser
+
+5. **Keyboard shortcuts**:
+   - `Escape` - Close the application
+   - `F1` - Focus search field
+   - `Enter` - Perform search
+   - Click the red "✕" button to close
 
 ## Keyboard Shortcuts
 
@@ -73,8 +88,17 @@ An Alfred-style desktop application built with Python that allows you to search 
 - **Memory Management**: Proper image reference handling
 - **User Experience**: Loading indicators and status messages
 
-### Web Scraping
-The application attempts to scrape Best Buy's search results page. If the scraping fails (due to rate limiting, site changes, or network issues), it falls back to displaying mock product data for demonstration purposes.
+### Data Fetching
+The application uses Oxylabs Real-Time Crawler for reliable data fetching from Best Buy. This provides:
+- **Reliable Access**: Bypasses anti-bot measures
+- **Structured Data**: Pre-parsed product information
+- **High Success Rate**: Professional proxy infrastructure
+- **Optimized Performance**: URL-level price filtering for faster response times
+- **Clean Results**: No mock data - shows only real search results
+
+The search is optimized by including price filters directly in the URL (`&qp=price_facet=Price~less+than+$5,995`) to reduce response time and data transfer.
+
+If Oxylabs credentials are not provided or no products are found, the app will display an appropriate message.
 
 ## Troubleshooting
 
@@ -83,7 +107,7 @@ The application attempts to scrape Best Buy's search results page. If the scrapi
 1. **No products found**
    - Check your internet connection
    - Try different search terms
-   - The app may be using fallback mode
+   - Verify your Oxylabs credentials are configured
 
 2. **Images not loading**
    - This is normal if the product doesn't have an image
@@ -91,7 +115,7 @@ The application attempts to scrape Best Buy's search results page. If the scrapi
 
 3. **Search not working**
    - Best Buy may have changed their website structure
-   - The app will show mock data as a fallback
+   - Check your Oxylabs credentials and account status
 
 ### Dependencies Issues
 
@@ -99,7 +123,7 @@ If you encounter import errors:
 
 ```bash
 # Install missing packages
-pip install tkinter requests Pillow beautifulsoup4 lxml
+pip install tkinter requests Pillow beautifulsoup4 lxml oxylabs python-dotenv
 
 # On some systems, tkinter might need to be installed separately
 # Ubuntu/Debian:
@@ -112,13 +136,25 @@ sudo yum install tkinter
 brew install python-tk
 ```
 
+### Oxylabs Setup
+
+To use Oxylabs Real-Time Crawler:
+
+1. **Sign up for Oxylabs**: Visit [oxylabs.io](https://oxylabs.io) and create an account
+2. **Get credentials**: Find your username and password in your Oxylabs dashboard
+3. **Configure environment**: Copy `oxylabs_config.example` to `.env` and add your credentials
+4. **Test connection**: The app will automatically use Oxylabs when credentials are provided
+
+Without Oxylabs credentials, the app will use fallback mock data.
+
 ## Development
 
 ### Project Structure
 ```
 alfred-bestbuyer/
-├── bestbuy_searcher.py    # Main application
+├── bestbuy_searcher.py    # Main application (everything included)
 ├── requirements.txt       # Python dependencies
+├── .env                  # Oxylabs credentials (create with --setup)
 └── README.md             # This file
 ```
 
@@ -136,4 +172,4 @@ This project is for educational and personal use. Please respect Best Buy's term
 
 ## Disclaimer
 
-This application is not affiliated with Best Buy. Web scraping may be subject to rate limiting or blocking. The application includes fallback functionality for demonstration purposes. # alfred-bestbuyer
+This application is not affiliated with Best Buy. Web scraping may be subject to rate limiting or blocking. The application includes fallback functionality for demonstration purposes. 
