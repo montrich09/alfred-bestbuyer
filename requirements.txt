@@ -2,5 +2,4 @@ requests>=2.25.0
 Pillow>=11.0.0
 beautifulsoup4>=4.9.0
 lxml>=4.6.0
-oxylabs>=2.0.0
 python-dotenv>=0.19.0 

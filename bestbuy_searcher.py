@@ -9,7 +9,6 @@ import re
 from urllib.parse import urljoin, quote_plus
 import json
 import os
-from oxylabs import RealtimeClient
 
 # Load environment variables from .env file if it exists
 try:
@@ -44,7 +43,6 @@ class BestBuySearcher:
         self.search_var = tk.StringVar()
         self.products = []
         self.current_images = []  # Keep references to prevent garbage collection
-        self.oxylabs_available = bool(os.getenv('OXYLABS_USERNAME') and os.getenv('OXYLABS_PASSWORD'))
         
         self.setup_ui()
         
@@ -117,19 +115,6 @@ class BestBuySearcher:
         # Status frame (compact)
         status_frame = tk.Frame(self.results_container, bg='#2c2c2c')
         status_frame.pack(fill=tk.X, pady=(5, 0))
-        
-        # Oxylabs status (smaller)
-        oxylabs_status = "✅" if self.oxylabs_available else "⚠️"
-        oxylabs_color = "#34C759" if self.oxylabs_available else "#FF3B30"
-        
-        oxylabs_label = tk.Label(
-            status_frame,
-            text=oxylabs_status,
-            font=('SF Pro Display', 8),
-            bg='#2c2c2c',
-            fg=oxylabs_color
-        )
-        oxylabs_label.pack(side=tk.LEFT, padx=20)
         
         # Results label (compact)
         self.results_label = tk.Label(
@@ -229,140 +214,177 @@ class BestBuySearcher:
             self.root.after(0, lambda: self._show_error(f"Search failed: {str(e)}"))
             
     def _scrape_bestbuy(self, query):
-        """Scrape Best Buy for products under $5,995 using Oxylabs Real-Time Crawler
+        """Scrape Best Buy for products using Oxylabs Real-Time API
         Optimized with URL price filter for faster response times"""
         products = []
-        
+
         # Get Oxylabs credentials from environment variables
         username = os.getenv('OXYLABS_USERNAME')
         password = os.getenv('OXYLABS_PASSWORD')
-        
+
         print(f"🔍 Checking credentials: username={'*' * len(username) if username else 'None'}, password={'*' * len(password) if password else 'None'}")
-        
+
         if not username or not password:
             print("⚠️  Oxylabs credentials not found.")
             return []
-        
-        try:
-            # Initialize Oxylabs Real-Time Client
-            client = RealtimeClient(username=username, password=password)
-            
-            # Best Buy search URL with price filter for faster response
-            search_url = f"https://www.bestbuy.com/site/searchpage.jsp?st={quote_plus(query)}&qp=price_facet=Price~less+than+$5,995"
-            
-            print(">>>>> Search URL:", search_url);
 
-            # Configure parsing instructions
-            parsing_instructions = {
-                "products": {
-                    "_fns": [
-                        {
-                            "_fn": "xpath",
-                            "_args": ["//div[contains(@class, 'shop-sku-list-item')]"]
-                        }
-                    ],
-                    "_items": {
-                        "name": {
-                            "_fns": [
-                                {
-                                    "_fn": "xpath_one",
-                                    "_args": [".//h4[contains(@class, 'sku-title') or contains(@class, 'sku-header')]//text()"]
-                                }
-                            ]
-                        },
-                        "price": {
-                            "_fns": [
-                                {
-                                    "_fn": "xpath_one",
-                                    "_args": [".//div[contains(@class, 'priceView-customer-price') or contains(@class, 'priceView-layout-large')]//text()"]
-                                }
-                            ]
-                        },
-                        "image_url": {
-                            "_fns": [
-                                {
-                                    "_fn": "xpath_one",
-                                    "_args": [".//img/@src"]
-                                }
-                            ]
-                        },
-                        "product_url": {
-                            "_fns": [
-                                {
-                                    "_fn": "xpath_one",
-                                    "_args": [".//a[contains(@class, 'image-link')]/@href"]
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-            
-            # Make the request using universal scraper
-            response = client.universal.scrape_url(                
-                url=search_url,
-                render="html",
-                source="universal",
-                geo_location="United States",
-                # user_agent_type="desktop",
-                parse=True,
-                parsing_instructions=parsing_instructions
+        try:
+            search_url = (
+                f"https://www.bestbuy.com/site/searchpage.jsp?st={query}"
+                f"&nrp=12&cp=1&qp=price_facet=Price~less+than+$5,995"
             )
             
-            print(">>>>> Response: ", response);
-            print(">>>>> Response type: ", type(response));
-            print(">>>>> Response attributes: ", [attr for attr in dir(response) if not attr.startswith('_')]);
-            print(">>>>> Response results: ", response.results if hasattr(response, 'results') else 'No results attribute');
-            print(">>>>> Response raw: ", response.raw if hasattr(response, 'raw') else 'No raw attribute');
+            # Structure payload for Oxylabs Real-Time API (optimized for smaller response)
+            payload = {
+                'source': 'universal',  # Use universal source for Best Buy
+                'url': search_url,
+                'geo_location': 'United States',
+                'render': 'html',  # Get HTML for faster response
+            }
+
+            print(">>>>> Payload:", payload);
+
+            # Get response from Oxylabs Real-Time API
+            response = requests.request(
+                'POST',
+                'https://realtime.oxylabs.io/v1/queries',
+                auth=(username, password),
+                json=payload,
+                timeout=30  # Increased timeout for reliability
+            )
+            
+            print(">>>>> Response status:", response.status_code);
+            print(">>>>> Response headers:", dict(response.headers));
 
             # Check if the response was successful
-            try:
-                # Check if response has results
-                if hasattr(response, 'results') and response.results:
-                    # Get the response data
-                    data = response.results
-                    print(">>>>> Data type: ", type(data));
-                    print(">>>>> Data length: ", len(data) if isinstance(data, list) else 'Not a list');
-                    if isinstance(data, list) and len(data) > 0:
-                        print(">>>>> First result: ", data[0]);
+            if response.status_code == 200:
+                # Parse the JSON response
+                data = response.json()
+                print(">>>>> Response data keys:", list(data.keys()) if isinstance(data, dict) else 'Not a dict');
+                
+                # Extract products from the response
+                if 'results' in data and len(data['results']) > 0:
+                    result = data['results'][0]
+                    print(">>>>> Result keys:", list(result.keys()) if isinstance(result, dict) else 'Not a dict');
                     
-                    # Extract products from the response
-                    if isinstance(data, list) and len(data) > 0:
-                        result = data[0]
-                        print(">>>>> Result type: ", type(result));
-                        print(">>>>> Result keys: ", list(result.keys()) if isinstance(result, dict) else 'Not a dict');
+                    # Check if content is a string (HTML) or dict (JSON)
+                    if 'content' in result:
+                        content = result['content']
+                        print(">>>>> Content type:", type(content));
                         
-                        if isinstance(result, dict) and 'content' in result and 'products' in result['content']:
-                            raw_products = result['content']['products']
-                            print(f">>>>> Found {len(raw_products)} raw products");
+                        # print(">>>>> Content:", content);
+                        
+                        if isinstance(content, str):
+                            # Content is HTML string (fallback), parse it
+                            soup = BeautifulSoup(content, 'html.parser')
                             
-                            for raw_product in raw_products[:20]:  # Limit to first 20 results
+                            # Try different possible product container selectors
+                            product_containers = (
+                                soup.find_all('div', class_='shop-sku-list-item') or
+                                soup.find_all('li', class_='sku-item') or
+                                soup.find_all('div', class_='sku-item') or
+                                soup.find_all('div', {'data-testid': 'product-card'}) or
+                                soup.find_all('div', class_='product-card')
+                            )
+                            
+                            print(f">>>>> Found {len(product_containers)} product containers in HTML (fallback)");
+                            
+                            for container in product_containers[:10]:  # Limit to first 10 results
                                 try:
-                                    product = self._process_oxylabs_product(raw_product, query)
-                                    if product:  # Price already filtered by URL
+                                    product = self._extract_product_info(container, query)
+                                    if product and product['price'] < 5995:  # Double-check price filter
                                         products.append(product)
                                 except Exception as e:
                                     print(f">>>>> Error processing product: {e}");
                                     continue
+                        elif isinstance(content, dict):
+                            # Content is JSON, let's explore its structure
+                            print(">>>>> Content keys:", list(content.keys()));
+                            print(">>>>> Content sample:", str(content)[:500] + "..." if len(str(content)) > 500 else str(content));
+                            
+                            # Try different possible structures
+                            if 'results' in content:
+                                raw_products = content['results']
+                                print(f">>>>> Found {len(raw_products)} raw products in JSON");
+                                
+                                for raw_product in raw_products[:10]:  # Limit to first 10 results
+                                    try:
+                                        product = self._process_oxylabs_product(raw_product, query)
+                                        if product and product['price'] < 5995:  # Double-check price filter
+                                            products.append(product)
+                                    except Exception as e:
+                                        print(f">>>>> Error processing product: {e}");
+                                        continue
+                            elif 'products' in content:
+                                raw_products = content['products']
+                                print(f">>>>> Found {len(raw_products)} products in JSON");
+                                
+                                for raw_product in raw_products[:10]:  # Limit to first 10 results
+                                    try:
+                                        product = self._process_oxylabs_product(raw_product, query)
+                                        if product and product['price'] < 5995:  # Double-check price filter
+                                            products.append(product)
+                                    except Exception as e:
+                                        print(f">>>>> Error processing product: {e}");
+                                        continue
+                            elif 'content' in content:
+                                # Nested content structure
+                                nested_content = content['content']
+                                print(">>>>> Found nested content, exploring...");
+                                if isinstance(nested_content, list):
+                                    for item in nested_content[:10]:
+                                        try:
+                                            product = self._process_oxylabs_product(item, query)
+                                            if product and product['price'] < 5995:
+                                                products.append(product)
+                                        except Exception as e:
+                                            print(f">>>>> Error processing nested product: {e}");
+                                            continue
+                            else:
+                                print(">>>>> Content is dict but no 'results', 'products', or 'content' found");
+                                print(">>>>> Available keys:", list(content.keys()));
                         else:
-                            print(">>>>> No 'content' or 'products' in result");
+                            print(">>>>> Content is neither HTML string nor JSON with results");
                     else:
-                        print(">>>>> No results in data or empty results");
-                    
-                    if not products:
-                        print("⚠️  No products found via Oxylabs.")
-                        return []
-                        
+                        print(">>>>> No 'content' in result");
                 else:
-                    print(f"⚠️  Oxylabs request failed - no results in response")
+                    print(">>>>> No 'results' in data or empty results");
+                
+                # Save HTML content to file and open in Chrome for debugging
+                if 'results' in data and len(data['results']) > 0:
+                    result = data['results'][0]
+                    if 'content' in result and isinstance(result['content'], str):
+                        try:
+                            # Save HTML to file
+                            html_file_path = '/tmp/bestbuy_response.html'
+                            with open(html_file_path, 'w', encoding='utf-8') as f:
+                                f.write(result['content'])
+                            print(f"💾 HTML response saved to: {html_file_path}")
+                            
+                            # Open in Chrome
+                            import subprocess
+                            try:
+                                subprocess.Popen(['google-chrome', html_file_path])
+                                print("🌐 Opening HTML response in Chrome...")
+                            except FileNotFoundError:
+                                try:
+                                    subprocess.Popen(['chromium-browser', html_file_path])
+                                    print("🌐 Opening HTML response in Chromium...")
+                                except FileNotFoundError:
+                                    print("⚠️  Chrome/Chromium not found. HTML saved to:", html_file_path)
+                        except Exception as e:
+                            print(f"⚠️  Error saving/opening HTML: {e}")
+                
+                if not products:
+                    print("⚠️  No products found via Oxylabs API.")
                     return []
-                    
-            except Exception as e:
-                print(f"⚠️  Error processing response: {e}")
+            else:
+                print(f"⚠️  Oxylabs API request failed with status: {response.status_code}")
+                print(f"⚠️  Response text: {response.text[:500]}...")
                 return []
                 
         except Exception as e:
-            print(f"⚠️  Oxylabs error: {str(e)}")
+            print(f"⚠️  Oxylabs API error: {str(e)}")
             print(f"🔍 Error type: {type(e).__name__}")
             import traceback
             traceback.print_exc()
@@ -370,34 +392,96 @@ class BestBuySearcher:
             
         return products
         
-    def _process_oxylabs_product(self, raw_product, query):
-        """Process product data from Oxylabs response"""
+    def _extract_product_info(self, container, query):
+        """Extract product information from HTML container"""
         try:
-            # Extract product information
-            name = raw_product.get('name', '').strip()
-            if not name:
-                name = f"{query} - Product"
+            # Extract product name - try multiple selectors
+            name_elem = (
+                container.find('h4', class_='sku-title') or
+                container.find('h4', class_='sku-header') or
+                container.find('h4', class_='product-title') or
+                container.find('a', class_='image-link') or
+                container.find('h3') or
+                container.find('h4')
+            )
+            name = name_elem.get_text(strip=True) if name_elem else f"{query} - Product"
             
-            price_text = raw_product.get('price', '$0')
+            # Extract price - try multiple selectors
+            price_elem = (
+                container.find('div', class_='priceView-customer-price') or
+                container.find('div', class_='priceView-layout-large') or
+                container.find('div', class_='price') or
+                container.find('span', class_='price') or
+                container.find('div', {'data-testid': 'price'})
+            )
+            price_text = price_elem.get_text(strip=True) if price_elem else '$0'
             price = self._extract_price(price_text)
             
-            image_url = raw_product.get('image_url')
+            # Extract image URL
+            img_elem = container.find('img')
+            image_url = img_elem.get('src') if img_elem else None
             if image_url and not image_url.startswith('http'):
                 image_url = urljoin('https://www.bestbuy.com', image_url)
             
-            product_url = raw_product.get('product_url')
+            # Extract product URL
+            link_elem = (
+                container.find('a', class_='image-link') or
+                container.find('a', class_='product-link') or
+                container.find('a')
+            )
+            product_url = link_elem.get('href') if link_elem else None
             if product_url and not product_url.startswith('http'):
                 product_url = urljoin('https://www.bestbuy.com', product_url)
             
-            return {
-                'name': name,
-                'price': price,
-                'image_url': image_url,
-                'product_url': product_url
-            }
+            print(f">>>>> Processing HTML product: {name[:50]}... | Price: {price_text}");
             
-        except Exception:
-            return None
+            if name and price > 0:
+                return {
+                    'name': name,
+                    'price': price,
+                    'image_url': image_url,
+                    'product_url': product_url
+                }
+        except Exception as e:
+            print(f"Error extracting product info: {e}")
+        
+        return None
+        
+    def _process_oxylabs_product(self, raw_product, query):
+        """Process product data from Oxylabs Real-Time API response"""
+        try:
+            # Extract product information from the structured response
+            name = raw_product.get('title', raw_product.get('name', '')).strip()
+            if not name:
+                name = f"{query} - Product"
+            
+            # Extract price - try different possible fields
+            price_text = raw_product.get('price', raw_product.get('price_range', '$0'))
+            price = self._extract_price(price_text)
+            
+            # Extract image URL
+            image_url = raw_product.get('image', raw_product.get('image_url', ''))
+            if image_url and not image_url.startswith('http'):
+                image_url = urljoin('https://www.bestbuy.com', image_url)
+            
+            # Extract product URL
+            product_url = raw_product.get('url', raw_product.get('product_url', ''))
+            if product_url and not product_url.startswith('http'):
+                product_url = urljoin('https://www.bestbuy.com', product_url)
+            
+            print(f">>>>> Processing product: {name[:50]}... | Price: {price_text} | Image: {image_url[:50] if image_url else 'None'}...");
+            
+            if name and price > 0:
+                return {
+                    'name': name,
+                    'price': price,
+                    'image_url': image_url,
+                    'product_url': product_url
+                }
+        except Exception as e:
+            print(f"Error processing Oxylabs product: {e}")
+        
+        return None
             
     def _extract_price(self, price_text):
         """Extract numeric price from price text"""
@@ -548,63 +632,7 @@ class BestBuySearcher:
         self.results_label.config(text=message, fg='#e74c3c')
         messagebox.showerror("Error", message)
 
-def setup_credentials():
-    """Setup Oxylabs credentials interactively"""
-    print("🔧 Best Buy Searcher - Oxylabs Setup")
-    print("=" * 40)
-    print()
-    print("To use real Best Buy data, you need Oxylabs credentials.")
-    print("If you don't have an account, visit: https://oxylabs.io")
-    print()
-    
-    # Check if .env already exists
-    env_file = ".env"
-    if os.path.exists(env_file):
-        print(f"⚠️  {env_file} already exists!")
-        overwrite = input("Do you want to overwrite it? (y/n): ").lower()
-        if overwrite != 'y':
-            print("Setup cancelled.")
-            return False
-    
-    # Get credentials
-    print("\n📝 Enter your Oxylabs credentials:")
-    username = input("Username (email): ").strip()
-    password = input("Password: ").strip()
-    
-    if not username or not password:
-        print("❌ Username and password are required!")
-        return False
-    
-    # Create .env file
-    env_content = f"""# Oxylabs Real-Time Crawler Configuration
-# Your Oxylabs username (email)
-OXYLABS_USERNAME={username}
-
-# Your Oxylabs password
-OXYLABS_PASSWORD={password}
-
-# Optional: Oxylabs endpoint (usually not needed, defaults to production)
-# OXYLABS_ENDPOINT=https://realtime.oxylabs.io/v1/queries
-"""
-    
-    try:
-        with open(env_file, 'w') as f:
-            f.write(env_content)
-        
-        print(f"\n✅ Credentials saved to {env_file}")
-        print("🔍 You can now restart the app to use real Best Buy data!")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error saving credentials: {e}")
-        return False
-
 def main():
-    # Check for command line arguments
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "--setup":
-        setup_credentials()
-        return
     
     root = tk.Tk()
     print("Starting Best Buy Searcher...")

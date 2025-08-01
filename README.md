@@ -32,13 +32,12 @@ An Alfred-style desktop application built with Python that allows you to search 
    pip install -r requirements.txt
    ```
 
-3. **Configure Oxylabs (Optional)**:
+3. **Configure Oxylabs**:
+   Create a `.env` file in the project root with your Oxylabs credentials:
    ```bash
-   # Setup credentials interactively
-   python bestbuy_searcher.py --setup
-   
-   # Or edit .env file manually
-   nano .env
+   # Oxylabs Real-Time Crawler Configuration
+   OXYLABS_USERNAME=your_username@example.com
+   OXYLABS_PASSWORD=your_password
    ```
 
 4. **Run the application**:
@@ -154,7 +153,7 @@ Without Oxylabs credentials, the app will use fallback mock data.
 alfred-bestbuyer/
 ├── bestbuy_searcher.py    # Main application (everything included)
 ├── requirements.txt       # Python dependencies
-├── .env                  # Oxylabs credentials (create with --setup)
+├── .env                  # Oxylabs credentials (create manually)
 └── README.md             # This file
 ```
 
